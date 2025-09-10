@@ -291,8 +291,8 @@ def main():
         return
     
     # Example coordinates in Kenya
-    latitude = -1.2921  # Nairobi, Kenya
-    longitude = 36.8219
+    latitude = 0.0917 # Kisumu, Kenya
+    longitude = 34.7680
     
     print(f"Fetching soil data for coordinates: {latitude}, {longitude}")
     
@@ -305,7 +305,7 @@ def main():
         print("Failed to fetch soil data. Exiting.")
         return
     
-    print("Raw soil data:", soil_data)
+    #print("Raw soil data:", soil_data)
     
     # Classify soil properties
     print("\nClassifying soil properties...")
