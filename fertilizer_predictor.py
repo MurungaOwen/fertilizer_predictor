@@ -20,6 +20,9 @@ import google.generativeai as genai
 # Load environment variables
 load_dotenv()
 
+# Network defaults
+TIMEOUT_S = 15  # seconds
+
 class SoilDataFetcher:
     """Handles interaction with the iSDAsoil API"""
     
@@ -94,15 +97,7 @@ class SoilDataFetcher:
         Args:
             latitude: Latitude coordinate
             longitude: Longitude coordinate
-            
-        Returns:
-            Dict containing soil properties or None if failed
-        """
-        # Ensure we have a valid token
-        if not self._is_token_valid():
-            if not self.authenticate():
-                return None
-        
+        """    
         try:
             # Query the soilproperty endpoint for top soil data (0-20cm depth)
             soil_url = f"{self.base_url}/isdasoil/v2/soilproperty"
@@ -112,19 +107,31 @@ class SoilDataFetcher:
                 "depth": "0-20"  # Top soil only as required
                 # Don't specify property - get all properties then filter what we need
             }
-            
+
             response = requests.get(
-                soil_url, 
-                params=params, 
-                headers=self._get_headers()
+                soil_url,
+                params=params,
+                headers=self._get_headers(),
+                timeout=TIMEOUT_S,
             )
+            if response.status_code == 401:
+                # Refresh token once and retry
+                if self.authenticate():
+                    response = requests.get(
+                        soil_url,
+                        params=params,
+                        headers=self._get_headers(),
+                        timeout=TIMEOUT_S,
+                    )
+                else:
+                    return None
             response.raise_for_status()
-            
+
             soil_data = response.json()
             print(f"Successfully fetched soil data for coordinates ({latitude}, {longitude})")
-            
+
             return soil_data
-            
+
         except requests.exceptions.RequestException as e:
             print(f"Failed to fetch soil properties: {e}")
             return None
@@ -140,7 +147,6 @@ class SoilClassifier:
         "potassium": {"low": 39, "high": 195},
         "ph": {"low": 5.3, "high": 7.3}
     }
-    
     @staticmethod
     def classify_property(value: float, property_name: str) -> str:
         """
@@ -156,10 +162,15 @@ class SoilClassifier:
         thresholds = SoilClassifier.THRESHOLDS.get(property_name.lower())
         if not thresholds:
             return "Unknown"
-        
-        if value <= thresholds["low"]:
+
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            return "Unknown"
+
+        if v <= thresholds["low"]:
             return "Low"
-        elif value <= thresholds["high"]:
+        elif v <= thresholds["high"]:
             return "Moderate"
         else:
             return "High"
@@ -266,7 +277,7 @@ Please provide:
 def main():
     """Main function to execute the complete workflow"""
     
-    print("Fertilizer Predictor - iSDA Take-home Assignment")
+    print("Fertilizer Predictor")
     print("=" * 50)
     
     # Load credentials from environment variables
@@ -305,7 +316,7 @@ def main():
         print(f"  {nutrient.capitalize()}: {data['value']} - {data['classification']}")
     
     # Task B: Generate fertilizer recommendation
-    print("\nask B: Generating fertilizer recommendation using Gemini...")
+    print("\nTask B: Generating fertilizer recommendation using Gemini...")
     recommender = FertilizerRecommender(gemini_api_key)
     
     recommendation = recommender.generate_recommendation(classified_soil)
